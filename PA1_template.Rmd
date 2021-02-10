@@ -5,21 +5,234 @@ output:
     keep_md: true
 ---
 
-
 ## Loading and preprocessing the data
 
+```{r, message=FALSE, warning=FALSE}
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+```
 
+Unziping the file. 
+
+```{r}
+if (!dir.exists("data")){
+  dir.create("data")
+}
+
+if (!file.exists("activity.csv")){
+  unzip("activity.zip", exdir = getwd())
+}
+```
+
+Reading the data
+
+```{r}
+data0<- read.csv("activity.csv", header = TRUE)
+```
+
+Transforming the "date" column into Date class.
+
+```{r}
+data0$date <- ymd(data0$date)
+```
+
+Let's take a look at the data.
+
+```{r}
+head(data0)
+```
 
 ## What is mean total number of steps taken per day?
 
+Calculate the total number of steps taken per day
 
+```{r}
+total_steps_day <- data0 %>% group_by(date) %>% 
+  summarize(steps_day = sum(steps, na.rm = TRUE))
+
+head(total_steps_day)
+```
+
+Make a histogram of the total number of steps taken each day
+
+```{r}
+hist(total_steps_day$steps_day, 
+     main = "Total number of steps taken per day", 
+     xlab = "Total steps taken per day", 
+     col = "magenta", 
+     ylim = c(0,20), 
+     breaks = seq(0,25000, by=2500))
+```
+
+Calculate and report the mean of the total number of steps taken per day
+
+```{r}
+mean(total_steps_day$steps_day)
+```
+
+Calculate and report the median of the total number of steps taken per day
+
+```{r}
+median(total_steps_day$steps_day)
+```
 
 ## What is the average daily activity pattern?
 
+Calculating the averaged daily steps
 
+```{r}
+average_daily_steps <- aggregate(data0$steps, 
+                                 by=list(data0$interval), 
+                                 mean, 
+                                 na.rm=TRUE)
+
+names(average_daily_steps) <- c("interval", "average.steps")
+
+head(average_daily_steps)
+```
+
+Make a time series plot of the 5-minute interval and the average number of steps taken, averaged across all days.
+
+```{r}
+plot(average_daily_steps$interval, average_daily_steps$average.steps, 
+     type="l", 
+     main = "Time series - average steps by intervals", 
+     xlab= "Intervals", 
+     ylab="Average steps", 
+     lwd=2, 
+     col="magenta")
+```
+
+Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
+
+```{r}
+average_daily_steps[which.max(average_daily_steps$average.steps), ]$interval
+```
 
 ## Imputing missing values
 
+Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with NAs.
 
+```{r}
+sum(is.na(data0$steps))
+```
+
+Devise a strategy for filling in all of the missing values in the dataset. The strategy does not need to be sophisticated. For example, you could use the mean/median for that day, or the mean for that 5-minute interval, etc.
+
+Let's create a function that will retain the mean value for each interval.
+
+```{r}
+get.mean.value <- function(interval){
+  average_daily_steps[average_daily_steps$interval == interval, ]$average.steps
+}
+```
+
+Create a new dataset that is equal to the original dataset but with the missing data filled in.
+
+```{r}
+data1 <- data0
+
+for (i in 1:nrow(data1)){
+    if(is.na(data1[i,]$steps)){
+        data1[i,]$steps <- get.mean.value(data1[i,]$interval)
+    }
+}
+
+head(data1)
+
+sum(is.na(data1$steps))
+```
+
+Calculate the total number of steps taken per day in the new data with no missing values.
+
+```{r}
+total_steps_day_data1 <- data1 %>% group_by(date) %>% 
+  summarize(steps_day = sum(steps, na.rm = TRUE))
+
+head(total_steps_day_data1)
+```
+
+Make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day.
+
+```{r}
+hist(total_steps_day_data1$steps_day, 
+     main = "Total number of steps taken per day", 
+     xlab = "Total steps taken per day", 
+     col = "magenta", 
+     ylim = c(0,20), 
+     breaks = seq(0,25000, by=2500))
+```
+
+Calculate and report the mean of the total number of steps taken per day
+
+```{r}
+mean(total_steps_day_data1$steps_day)
+```
+
+Calculate and report the median of the total number of steps taken per day
+
+```{r}
+median(total_steps_day_data1$steps_day)
+```
+
+Do these values differ from the estimates from the first part of the assignment? 
+Let's take a look at the two different means. 
+
+```{r}
+mean1 <- mean(total_steps_day$steps_day) #with NA values
+mean2 <- mean(total_steps_day_data1$steps_day) #without NA values
+percentage.diff.mean <- (mean2*100/mean1)-100
+percentage.diff.mean
+```
+
+Let's take a look at the two different medians. 
+
+```{r}
+median1 <- median(total_steps_day$steps_day) #with NA values
+median2 <- median(total_steps_day_data1$steps_day) #without NA values
+percentage.diff.median <- (median2*100/median1)-100
+percentage.diff.median
+```
+
+What is the impact of imputing missing data on the estimates of the total daily number of steps?
+
+With inputed values, the mean went up by 15% and the median went up by 3.5%
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+Let's include a new column (weekday) in the dataset.
+
+```{r}
+weekday <- weekdays(data1$date)
+data1 <- cbind(data1,weekday)
+head(data1)
+```
+
+Create a new factor variable in the dataset with two levels – “weekday” and “weekend” indicating whether a given date is a weekday or weekend day.
+
+```{r}
+data1$datetype <- sapply(data1$date, function(x) {
+        if (weekdays(x) == "Saturday" | weekdays(x) =="Sunday") 
+                {y <- "Weekend"} else 
+                {y <- "Weekday"}
+                y
+        })
+
+head(data1)
+str(data1)
+```
+
+Make a panel plot containing a time series plot of the 5-minute interval and the average number of steps taken, averaged across all weekday days or weekend days.
+
+```{r}
+steps_by_date <- aggregate(steps~interval + datetype, data1, mean, na.rm = TRUE)
+
+plot<- ggplot(steps_by_date, aes(x = interval , y = steps, color = datetype)) +
+       geom_line() +
+       labs(title = "Average daily steps by type of date", x = "Interval", y = "Average number of steps") +
+       facet_wrap(~datetype, ncol = 1, nrow=2)
+print(plot)
+```
+
+
